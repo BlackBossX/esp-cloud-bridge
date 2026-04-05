@@ -10,12 +10,6 @@ ESP8266-01: Polls AWS EC2 Server for GPIO Updates
 
 const char* WIFI_SSID = SECRET_WIFI_SSID;
 const char* WIFI_PASSWORD = SECRET_WIFI_PASSWORD;
-
-// Allow SECRET_SERVER_URL to be set in secrets.h locally; otherwise fall back to
-// a placeholder. Do NOT commit a real server URL to git history.
-#ifndef SECRET_SERVER_URL
-#define SECRET_SERVER_URL "http://YOUR_SERVER_IP_OR_DOMAIN/api/sync"
-#endif
 const char* SERVER_URL = SECRET_SERVER_URL;
 
 unsigned long lastPoll = 0;
@@ -52,7 +46,7 @@ bool pin0State = false;
 void applyPinState(int pin, bool on) {
 pinMode(pin, OUTPUT);
 // Inverting logic here since ESP-01 built-in LED/relay is active LOW
-digitalWrite(pin, on ? LOW : HIGH); 
+digitalWrite(pin, on ? HIGH : LOW); 
 
 Serial.printf("GPIO %d -> %s\n", pin, on ? "ON" : "OFF");
 }

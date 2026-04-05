@@ -1,4 +1,5 @@
 import json
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import parse
@@ -20,104 +21,90 @@ HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", 8080))
 
 # Global state stored on the Cloud server. By default, Pin 2 is False
-GPIO_STATE = {"2": False}
+GPIO_STATE = {"2": False, "0": False}
+SENSOR_DATA = {"temperature": 28.0, "humidity": 42.0}
 
-DEFAULT_INDEX_HTML = """<!doctype html>
-<html>
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ESP Cloud Server</title>
-    <style>
-        body { font-family: sans-serif; margin: 2rem; max-width: 600px; }
-        .box { padding: 1rem; border: 1px solid #ccc; margin-bottom: 1rem; border-radius: 8px; }
-        button, input { padding: 0.5rem; margin: 0.25rem 0; }
-        pre { background: #f0f0f0; padding: 1rem; overflow-x: auto; }
-    </style>
-</head>
-<body>
-    <h2>ESP Cloud Control Panel</h2>
-    
-    <div class="box">
-        <h3>GPIO Control</h3>
-        <label>Pin: <input type="number" id="pin" value="2" style="width: 60px;" /></label><br>
-        <button onclick="setGpio(true)">Turn ON</button>
-        <button onclick="setGpio(false)">Turn OFF</button>
-    </div>
-
-    <div class="box">
-        <h3>System Status</h3>
-        <button onclick="getStatus()">Refresh Current State</button>
-    </div>
-
-    <pre id="output">Connecting to cloud...</pre>
-
-    <script>
-        const out = document.getElementById('output');
-        const getPin = () => parseInt(document.getElementById('pin').value, 10);
-
-        async function fetchApi(url, options = {}) {
-            out.textContent = "Loading...";
-            try {
-                const res = await fetch(url, options);
-                const data = await res.json();
-                out.textContent = JSON.stringify(data, null, 2);
-            } catch (err) {
-                out.textContent = "Error: " + err.message;
-            }
-        }
-
-        function setGpio(on) {
-            fetchApi('/api/gpio', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pin: getPin(), on: on })
-            });
-        }
-
-        function getStatus() { fetchApi(`/api/status`); }
-
-        // Start polling the server so UI auto-updates
-        setInterval(getStatus, 2000);
-        getStatus();
-    </script>
-</body>
-</html>
-"""
+def set_cors_headers(handler: BaseHTTPRequestHandler):
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Headers", "Content-Type")
 
 def send_json(handler: BaseHTTPRequestHandler, code: int, payload: dict):
     body = json.dumps(payload, separators=(',', ':')).encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    set_cors_headers(handler)
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
 
 class Handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(204)
+        set_cors_headers(self)
+        self.end_headers()
+        
     def do_GET(self):
         parsed = parse.urlparse(self.path)
 
-        if parsed.path == "/":
-            html = DEFAULT_INDEX_HTML.encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(html)))
-            self.end_headers()
-            self.wfile.write(html)
-            return
-
-        if parsed.path in ("/api/status", "/api/sync"):
-            # ESP fetches /api/sync to know what state its pins should be in
-            send_json(self, 200, {"ok": True, "state": GPIO_STATE})
-            return
-
-        send_json(self, 404, {"ok": False, "error": "Not found"})
-
-    def do_POST(self):
-        if self.path not in ("/api/led", "/api/gpio"):
+        if parsed.path.startswith("/api/"):
+            if parsed.path in ("/api/status", "/api/sync"):
+                send_json(self, 200, {"ok": True, "state": GPIO_STATE, "sensor": SENSOR_DATA})
+                return
             send_json(self, 404, {"ok": False, "error": "Not found"})
             return
+
+        # Serve React frontend static files
+        dist_path = ROOT / "frontend" / "dist"
+        
+        # Determine target file
+        request_path = parsed.path.lstrip("/")
+        if not request_path:
+            target_file = dist_path / "index.html"
+        else:
+            target_file = dist_path / request_path
+            
+        # Fallback to index.html for SPA routing routing
+        if not target_file.exists():
+            target_file = dist_path / "index.html"
+
+        if target_file.exists() and target_file.is_file():
+            content = target_file.read_bytes()
+            # Guess mimetype
+            mime_type, _ = mimetypes.guess_type(target_file.name)
+            if not mime_type:
+                mime_type = "application/octet-stream"
+
+            self.send_response(200)
+            self.send_header("Content-Type", mime_type)
+            self.send_header("Content-Length", str(len(content)))
+            set_cors_headers(self)
+            self.end_headers()
+            self.wfile.write(content)
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b"Frontend build not found. Run 'npm run build' in frontend folder.")
+
+    def do_POST(self):
+        if self.path not in ("/api/led", "/api/gpio", "/api/sensor"):
+            send_json(self, 404, {"ok": False, "error": "Not found"})
+            return
+
+        if self.path == "/api/sensor":
+            try:
+                content_len = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(content_len).decode("utf-8", errors="replace")
+                body = json.loads(raw) if raw else {}
+                
+                temp = body.get("temperature")
+                hum = body.get("humidity")
+                if temp is not None: SENSOR_DATA["temperature"] = float(temp)
+                if hum is not None: SENSOR_DATA["humidity"] = float(hum)
+                send_json(self, 200, {"ok": True, "sensor": SENSOR_DATA})
+                return
+            except Exception:
+                pass # Fallback to normal error
 
         try:
             content_len = int(self.headers.get("Content-Length", "0"))
