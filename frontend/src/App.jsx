@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Thermometer, Droplets, MapPin, Lightbulb, Settings, Home, X, CloudRain } from 'lucide-react';
 
@@ -9,6 +9,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [inputUrl, setInputUrl] = useState('');
+  
+  const pendingToggles = useRef(new Set());
 
   const effectiveUrl = serverUrl || (window.location.protocol === 'file:' ? 'http://localhost:8080' : window.location.origin);
 
@@ -18,7 +20,15 @@ export default function App() {
       if (!res.ok) throw new Error('Not ok');
       const data = await res.json();
       
-      if (data.state) setDeviceState({ '2': data.state['2'] || false, '0': data.state['0'] || false });
+      if (data.state) {
+        setDeviceState(prev => {
+          const newState = { ...prev };
+          // Only update from server if we are not actively toggling this pin
+          if (!pendingToggles.current.has('2')) newState['2'] = data.state['2'] || false;
+          if (!pendingToggles.current.has('0')) newState['0'] = data.state['0'] || false;
+          return newState;
+        });
+      }
       if (data.sensor) setSensor(data.sensor);
       
       setIsConnected(true);
@@ -37,6 +47,7 @@ export default function App() {
   const toggleDevice = async (pin) => {
     const targetState = !deviceState[pin];
     setDeviceState(prev => ({ ...prev, [pin]: targetState })); // Optimistic
+    pendingToggles.current.add(String(pin)); // Mark pin as currently changing
 
     try {
       const res = await fetch(`${effectiveUrl}/api/gpio`, {
@@ -46,11 +57,19 @@ export default function App() {
       });
       const data = await res.json();
       if (data.state) {
-        setDeviceState({ '2': data.state['2'] || false, '0': data.state['0'] || false });
+        setDeviceState(prev => {
+          const newState = { ...prev };
+          newState['2'] = data.state['2'] || false;
+          newState['0'] = data.state['0'] || false;
+          return newState;
+        });
       }
     } catch (err) {
       console.error("Toggle failed", err);
       setDeviceState(prev => ({ ...prev, [pin]: !targetState })); // Revert
+    } finally {
+      // Small timeout to ignore immediate fetch results that might still have old state
+      setTimeout(() => pendingToggles.current.delete(String(pin)), 1500);
     }
   };
 
