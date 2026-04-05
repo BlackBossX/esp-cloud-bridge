@@ -78,7 +78,7 @@ export default function App() {
           }}>
             <Home size={18} color="var(--accent-color)" />
           </div>
-          <span style={{ fontSize: '18px', fontWeight: '600' }}>Smartshimi</span>
+          <span style={{ fontSize: '18px', fontWeight: '600' }}>Blackway-Home</span>
         </div>
         <motion.button 
           whileTap={{ scale: 0.9 }}
