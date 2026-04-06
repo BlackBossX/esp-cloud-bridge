@@ -21,7 +21,7 @@ HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", 8080))
 
 # Global state stored on the Cloud server. By default, Pin 2 is False
-GPIO_STATE = {"2": False, "0": False}
+GPIO_STATE = {"2": False, "4": False}
 SENSOR_DATA = {"temperature": 28.0, "humidity": 42.0}
 
 def set_cors_headers(handler: BaseHTTPRequestHandler):
