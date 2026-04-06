@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Thermometer, Droplets, MapPin, Lightbulb, Settings, Home, X, CloudRain } from 'lucide-react';
 
 export default function App() {
-  const [deviceState, setDeviceState] = useState({ '2': false, '4': false });
+  const [deviceState, setDeviceState] = useState({ '2': false, '0': false });
   const [sensor, setSensor] = useState({ temperature: null, humidity: null });
   const [serverUrl, setServerUrl] = useState(localStorage.getItem('serverUrl') || '');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -25,7 +25,7 @@ export default function App() {
           const newState = { ...prev };
           // Only update from server if we are not actively toggling this pin
           if (!pendingToggles.current.has('2')) newState['2'] = data.state['2'] || false;
-          if (!pendingToggles.current.has('4')) newState['4'] = data.state['4'] || false;
+          if (!pendingToggles.current.has('0')) newState['0'] = data.state['0'] || false;
           return newState;
         });
       }
@@ -60,7 +60,7 @@ export default function App() {
         setDeviceState(prev => {
           const newState = { ...prev };
           newState['2'] = data.state['2'] || false;
-          newState['4'] = data.state['4'] || false;
+          newState['0'] = data.state['0'] || false;
           return newState;
         });
       }
@@ -164,7 +164,7 @@ export default function App() {
       {/* Devices Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <DeviceCard pin="2" name="Smart light 1" progress="94%" active={deviceState['2']} toggle={toggleDevice} delay={0.3} />
-        <DeviceCard pin="4" name="Smart light 2" progress="28%" active={deviceState['4']} toggle={toggleDevice} delay={0.4} />
+        <DeviceCard pin="0" name="Smart light 2" progress="28%" active={deviceState['0']} toggle={toggleDevice} delay={0.4} />
       </div>
 
       {/* Settings Modal */}
