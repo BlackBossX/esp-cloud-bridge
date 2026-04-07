@@ -18,7 +18,7 @@ def update_weather():
     now = time.time()
     if now - LAST_WEATHER_FETCH > 120:
         try:
-            url = f"https://api.openweathermap.org/data/2.5/weather?q=Eheliyagoda&units=metric&appid={WEATHER_API_KEY}"
+            url = f"https://api.openweathermap.org/data/2.5/weather?q=Thalavitiya&units=metric&appid={WEATHER_API_KEY}"
             with urllib.request.urlopen(url, timeout=3) as response:
                 data = json.loads(response.read().decode())
                 WEATHER_CACHE["temp"] = round(data["main"]["temp"])

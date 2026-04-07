@@ -161,7 +161,7 @@ export default function App() {
             <span style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <MapPin size={14} /> Location
             </span>
-            <span style={{ fontSize: '14px', fontWeight: '600' }}>Eheliyagoda</span>
+            <span style={{ fontSize: '14px', fontWeight: '600' }}>Thalavitiya</span>
           </div>
         </div>
       </motion.div>
