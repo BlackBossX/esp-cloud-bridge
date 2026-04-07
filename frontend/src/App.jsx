@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Thermometer, Droplets, MapPin, Lightbulb, Settings, Home, X, CloudRain } from 'lucide-react';
+import { Thermometer, Droplets, MapPin, Lightbulb, Settings, Home, X, CloudRain, Sun, Cloud, CloudLightning, CloudSnow, CloudFog } from 'lucide-react';                                                          
 
 export default function App() {
   const [deviceState, setDeviceState] = useState({ '2': false, '0': false });
   const [sensor, setSensor] = useState({ temperature: null, humidity: null });
+  const [weather, setWeather] = useState({ temp: null, humidity: null, condition: '', description: 'Loading...' });
   const [serverUrl, setServerUrl] = useState(localStorage.getItem('serverUrl') || '');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -13,7 +14,7 @@ export default function App() {
   const pendingToggles = useRef(new Set());
 
   const effectiveUrl = serverUrl || (window.location.protocol === 'file:' ? 'http://localhost:8080' : window.location.origin);
-
+  
   const fetchStatus = async () => {
     try {
       const res = await fetch(`${effectiveUrl}/api/status`);
@@ -23,7 +24,6 @@ export default function App() {
       if (data.state) {
         setDeviceState(prev => {
           const newState = { ...prev };
-          // Only update from server if we are not actively toggling this pin
           if (!pendingToggles.current.has('2')) newState['2'] = data.state['2'] || false;
           if (!pendingToggles.current.has('0')) newState['0'] = data.state['0'] || false;
           return newState;
@@ -44,10 +44,43 @@ export default function App() {
     return () => clearInterval(interval);
   }, [effectiveUrl]);
 
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        const apiKey = import.meta.env.VITE_WEATHER_API_KEY;
+        if (!apiKey) { console.error("Missing VITE_WEATHER_API_KEY"); return; }
+        const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Eheliyagoda&units=metric&appid=${apiKey}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setWeather({
+          temp: Math.round(data.main.temp),
+          humidity: data.main.humidity,
+          condition: data.weather[0].main.toLowerCase(),
+          description: data.weather[0].description
+        });
+      } catch (err) {
+        console.error("Weather fetch failed", err);
+      }
+    };
+    fetchWeather();
+    const weatherInterval = setInterval(fetchWeather, 5 * 60 * 1000);
+    return () => clearInterval(weatherInterval);
+  }, []);
+
+  const getWeatherIcon = () => {
+    const cond = weather.condition;
+    if (cond.includes('rain') || cond.includes('drizzle')) return <CloudRain size={40} color="var(--accent-color)" />;
+    if (cond.includes('clear')) return <Sun size={40} color="var(--accent-color)" />;
+    if (cond.includes('thunderstorm')) return <CloudLightning size={40} color="var(--accent-color)" />;
+    if (cond.includes('snow')) return <CloudSnow size={40} color="var(--accent-color)" />;
+    if (cond.includes('fog') || cond.includes('mist')) return <CloudFog size={40} color="var(--accent-color)" />;
+    return <Cloud size={40} color="var(--accent-color)" />;
+  };
+
   const toggleDevice = async (pin) => {
     const targetState = !deviceState[pin];
-    setDeviceState(prev => ({ ...prev, [pin]: targetState })); // Optimistic
-    pendingToggles.current.add(String(pin)); // Mark pin as currently changing
+    setDeviceState(prev => ({ ...prev, [pin]: targetState }));
+    pendingToggles.current.add(String(pin));
 
     try {
       const res = await fetch(`${effectiveUrl}/api/gpio`, {
@@ -66,9 +99,8 @@ export default function App() {
       }
     } catch (err) {
       console.error("Toggle failed", err);
-      setDeviceState(prev => ({ ...prev, [pin]: !targetState })); // Revert
+      setDeviceState(prev => ({ ...prev, [pin]: !targetState }));
     } finally {
-      // Small timeout to ignore immediate fetch results that might still have old state
       setTimeout(() => pendingToggles.current.delete(String(pin)), 1500);
     }
   };
@@ -125,13 +157,18 @@ export default function App() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
           <div>
             <div style={{ fontSize: '48px', fontWeight: '700', lineHeight: 1 }}>
-              {sensor.temperature || '--'}°C
+              {weather.temp !== null ? weather.temp : (sensor.temperature || '--')}°C
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '8px' }}>
-              Connected to Sensor
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '8px', textTransform: 'capitalize' }}>
+              {weather.description}
             </div>
           </div>
-          <CloudRain size={40} color="var(--accent-color)" />
+          <motion.div 
+            animate={{ y: [0, -10, 0] }} 
+            transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+          >
+            {getWeatherIcon()}
+          </motion.div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '24px' }}>
@@ -139,13 +176,13 @@ export default function App() {
             <span style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Droplets size={14} /> Humidity
             </span>
-            <span style={{ fontSize: '14px', fontWeight: '600' }}>{sensor.humidity || '--'} %</span>
+            <span style={{ fontSize: '14px', fontWeight: '600' }}>{weather.humidity !== null ? weather.humidity : (sensor.humidity || '--')} %</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <MapPin size={14} /> Location
             </span>
-            <span style={{ fontSize: '14px', fontWeight: '600' }}>Local Net</span>
+            <span style={{ fontSize: '14px', fontWeight: '600' }}>Eheliyagoda</span>
           </div>
         </div>
       </motion.div>
@@ -238,7 +275,7 @@ function DeviceCard({ pin, name, progress, active, toggle, delay }) {
       transition={{ delay }}
       style={{
         backgroundColor: active ? 'rgba(180, 255, 57, 0.05)' : 'var(--surface-color)',
-        borderRadius: 'var(--border-radius-lg)', padding: '20px', display: 'flex', flexDirection: 'column', 
+        borderRadius: 'var(--border-radius-lg)', padding: '20px', display: 'flex', flexDirection: 'column',
         justifyContent: 'space-between', minHeight: '140px', 
         border: `1px solid ${active ? 'rgba(180, 255, 57, 0.3)' : 'var(--border-color)'}`,
         transition: 'background-color 0.3s, border-color 0.3s'
