@@ -30,6 +30,7 @@ export default function App() {
         });
       }
       if (data.sensor) setSensor(data.sensor);
+      if (data.weather && data.weather.temp !== null) setWeather(data.weather);
       
       setIsConnected(true);
     } catch (err) {
@@ -44,28 +45,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [effectiveUrl]);
 
-  useEffect(() => {
-    const fetchWeather = async () => {
-      try {
-        const apiKey = import.meta.env.VITE_WEATHER_API_KEY;
-        if (!apiKey) { console.error("Missing VITE_WEATHER_API_KEY"); return; }
-        const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Eheliyagoda&units=metric&appid=${apiKey}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        setWeather({
-          temp: Math.round(data.main.temp),
-          humidity: data.main.humidity,
-          condition: data.weather[0].main.toLowerCase(),
-          description: data.weather[0].description
-        });
-      } catch (err) {
-        console.error("Weather fetch failed", err);
-      }
-    };
-    fetchWeather();
-    const weatherInterval = setInterval(fetchWeather, 5 * 60 * 1000);
-    return () => clearInterval(weatherInterval);
-  }, []);
 
   const getWeatherIcon = () => {
     const cond = weather.condition;

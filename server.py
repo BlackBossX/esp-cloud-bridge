@@ -5,6 +5,29 @@ from pathlib import Path
 from urllib import parse
 
 import os
+import time
+import urllib.request
+import urllib.error
+
+WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY", "7a87ce021c6fd0e64946b63f53cf8b2e")
+WEATHER_CACHE = {"temp": None, "humidity": None, "condition": "", "description": "Loading..."}
+LAST_WEATHER_FETCH = 0
+
+def update_weather():
+    global LAST_WEATHER_FETCH
+    now = time.time()
+    if now - LAST_WEATHER_FETCH > 120:
+        try:
+            url = f"https://api.openweathermap.org/data/2.5/weather?q=Eheliyagoda&units=metric&appid={WEATHER_API_KEY}"
+            with urllib.request.urlopen(url, timeout=3) as response:
+                data = json.loads(response.read().decode())
+                WEATHER_CACHE["temp"] = round(data["main"]["temp"])
+                WEATHER_CACHE["humidity"] = data["main"]["humidity"]
+                WEATHER_CACHE["condition"] = data["weather"][0]["main"].lower()
+                WEATHER_CACHE["description"] = data["weather"][0]["description"]
+                LAST_WEATHER_FETCH = now
+        except Exception as e:
+            print(f"Weather error: {e}")
 
 ROOT = Path(__file__).parent
 
@@ -49,7 +72,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path.startswith("/api/"):
             if parsed.path in ("/api/status", "/api/sync"):
-                send_json(self, 200, {"ok": True, "state": GPIO_STATE, "sensor": SENSOR_DATA})
+                update_weather()
+                send_json(self, 200, {"ok": True, "state": GPIO_STATE, "sensor": SENSOR_DATA, "weather": WEATHER_CACHE})
                 return
             send_json(self, 404, {"ok": False, "error": "Not found"})
             return
