@@ -10,6 +10,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [inputUrl, setInputUrl] = useState('');
+  const [lastError, setLastError] = useState('');
   
   const pendingToggles = useRef(new Set());
 
@@ -19,7 +20,13 @@ export default function App() {
     try {
       const res = await fetch(`${effectiveUrl}/api/status`);
       if (!res.ok) throw new Error('Not ok');
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Not JSON. Target may be incorrect.');
+      }
       
       if (data.state) {
         setDeviceState(prev => {
@@ -33,9 +40,11 @@ export default function App() {
       if (data.weather && data.weather.temp !== null) setWeather(data.weather);
       
       setIsConnected(true);
+      setLastError('');
     } catch (err) {
       console.error("Fetch failed", err);
       setIsConnected(false);
+      setLastError(err.message || 'Network error');
     }
   };
 
@@ -79,6 +88,7 @@ export default function App() {
     } catch (err) {
       console.error("Toggle failed", err);
       setDeviceState(prev => ({ ...prev, [pin]: !targetState }));
+      setLastError(err.message || 'Toggle error');
     } finally {
       setTimeout(() => pendingToggles.current.delete(String(pin)), 1500);
     }
@@ -86,6 +96,9 @@ export default function App() {
 
   const saveSettings = () => {
     let val = inputUrl.trim();
+    if (val && !val.startsWith('http://') && !val.startsWith('https://')) {
+      val = 'http://' + val;
+    }
     if (val.endsWith('/')) val = val.slice(0, -1);
     setServerUrl(val);
     localStorage.setItem('serverUrl', val);
@@ -236,7 +249,10 @@ export default function App() {
               </motion.button>
               
               <div style={{ fontSize: '12px', textAlign: 'center', marginTop: '12px', color: isConnected ? 'var(--accent-color)' : '#ff4444' }}>
-                {isConnected ? 'Connected to API' : 'Not Connected'}
+                {isConnected ? 'Connected to API' : `Error: ${lastError || 'Not Connected'}`}
+              </div>
+              <div style={{ fontSize: '10px', textAlign: 'center', marginTop: '4px', color: 'gray' }}>
+                Target: {effectiveUrl}
               </div>
             </motion.div>
           </motion.div>

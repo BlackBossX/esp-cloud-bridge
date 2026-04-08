@@ -1,0 +1,13 @@
+{
+  "appId": "com.blackway.home",
+  "appName": "Blackway Home",
+  "webDir": "dist",
+  "server": {
+    "cleartext": true
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
